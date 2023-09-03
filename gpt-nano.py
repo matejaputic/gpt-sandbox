@@ -10,7 +10,7 @@ block_size = 256
 max_iters = 5000
 eval_interval = 500
 learning_rate = 3e-4
-device = "mps"
+device = torch.device("mps")
 eval_iters = 200
 n_embed = 384
 n_head = 6
@@ -45,13 +45,14 @@ def get_batch(split):
     ix = torch.randint(len(data) - block_size, (batch_size,))
     x = torch.stack([data[i : i + block_size] for i in ix])
     y = torch.stack([data[i + 1 : i + block_size + 1] for i in ix])
+    x, y = x.to(device), y.to(device)
     return x, y
 
 
 class BigramLanguageModel(nn.Module):
     def __init__(self, vocab_size):
         super().__init__()
-        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size, device=device)
 
     def forward(self, idx, targets=None):
         logits = self.token_embedding_table(idx)  # B T C
@@ -79,17 +80,16 @@ class BigramLanguageModel(nn.Module):
 
 xb, yb = get_batch("train")
 m = BigramLanguageModel(vocab_size)
+m = m.to(device)
 logits, loss = m(xb, yb)
 print(logits.shape)
 print(loss)
-idx = torch.zeros((1, 1), dtype=torch.long)
+idx = torch.zeros((1, 1), dtype=torch.long, device=device)
 print(decode(m.generate(idx, max_new_tokens=100)[0].tolist()))
 
 optimizer = torch.optim.AdamW(m.parameters(), lr=learning_rate)
 
 for steps in range(10000):
-    if steps % eval_interval == 0:
-        print()
     xb, yb = get_batch("train")
     logits, loss = m(xb, yb)
     optimizer.zero_grad(set_to_none=True)
@@ -97,3 +97,6 @@ for steps in range(10000):
     optimizer.step()
 
 print(loss.item())
+idx = torch.zeros((1, 1), dtype=torch.long, device=device)
+print(decode(m.generate(idx, max_new_tokens=100)[0].tolist()))
+
