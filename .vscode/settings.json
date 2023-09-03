@@ -1,8 +1,12 @@
 {
     "cSpell.words": [
         "Bigram",
+        "dtype",
         "Hyperparameters",
         "itos",
+        "multinomial",
+        "optim",
+        "probs",
         "softmax",
         "stoi"
     ],

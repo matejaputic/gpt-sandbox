@@ -4,18 +4,14 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-# Hyperparameters
-batch_size = 64
-block_size = 256
-max_iters = 5000
-eval_interval = 500
-learning_rate = 3e-4
+# hyperparameters
+batch_size = 32  # how many independent sequences will we process in parallel?
+block_size = 8  # what is the maximum context length for predictions?
+max_iters = 3000
+eval_interval = 300
+learning_rate = 1e-2
 device = torch.device("mps")
 eval_iters = 200
-n_embed = 384
-n_head = 6
-n_layer = 6
-dropout = 0.2
 
 torch.manual_seed(1337)
 
@@ -38,6 +34,7 @@ def decode(l: List):
 
 
 train_data = torch.tensor(encode(train_data), dtype=torch.long)
+val_data = torch.tensor(encode(val_data), dtype=torch.long)
 
 
 def get_batch(split):
@@ -47,6 +44,21 @@ def get_batch(split):
     y = torch.stack([data[i + 1 : i + block_size + 1] for i in ix])
     x, y = x.to(device), y.to(device)
     return x, y
+
+
+@torch.no_grad()
+def estimate_loss():
+    out = {}
+    model.eval()
+    for split in ["train", "val"]:
+        losses = torch.zeros(eval_iters)
+        for k in range(eval_iters):
+            X, Y = get_batch(split)
+            logits, loss = model(X, Y)
+            losses[k] = loss.item()
+        out[split] = losses.mean()
+    model.train()
+    return out
 
 
 class BigramLanguageModel(nn.Module):
@@ -78,25 +90,27 @@ class BigramLanguageModel(nn.Module):
         return idx
 
 
-xb, yb = get_batch("train")
-m = BigramLanguageModel(vocab_size)
-m = m.to(device)
-logits, loss = m(xb, yb)
-print(logits.shape)
-print(loss)
-idx = torch.zeros((1, 1), dtype=torch.long, device=device)
-print(decode(m.generate(idx, max_new_tokens=100)[0].tolist()))
+model = BigramLanguageModel(vocab_size)
+model = model.to(device)
 
-optimizer = torch.optim.AdamW(m.parameters(), lr=learning_rate)
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
-for steps in range(10000):
+for i in range(max_iters):
+    if i % eval_interval == 0:
+        losses = estimate_loss()
+        print(
+            f"step {i}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
+        )
+
+    # Sample a batch of data
     xb, yb = get_batch("train")
-    logits, loss = m(xb, yb)
+
+    # Evaluate the losses
+    logits, loss = model(xb, yb)
     optimizer.zero_grad(set_to_none=True)
     loss.backward()
     optimizer.step()
 
 print(loss.item())
-idx = torch.zeros((1, 1), dtype=torch.long, device=device)
-print(decode(m.generate(idx, max_new_tokens=100)[0].tolist()))
-
+context = torch.zeros((1, 1), dtype=torch.long, device=device)
+print(decode(model.generate(context, max_new_tokens=500)[0].tolist()))
