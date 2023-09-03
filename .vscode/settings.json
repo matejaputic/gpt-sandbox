@@ -1,6 +1,10 @@
 {
     "cSpell.words": [
-        "stoi",
-        "itos"
-    ]
+        "Bigram",
+        "Hyperparameters",
+        "itos",
+        "softmax",
+        "stoi"
+    ],
+    "python.analysis.extraPaths": ["./sources"]
 }
